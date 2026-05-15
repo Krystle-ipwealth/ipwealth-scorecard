@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IP Wealth — Scorecard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library-for-js/2.38.0/msal-browser.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@300;400;500;600&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f4f2; --surface: #ffffff; --surface2: #f9f8f7; --border: #e8e5e0;
+    --accent: #c8102e; --accent-dark: #a00d24; --accent-light: #fdedf0;
+    --text: #1a1a1a; --muted: #888580;
+    --hit: #1a7a4a; --hit-bg: #edf7f1; --miss: #c8102e; --miss-bg: #fdedf0;
+    --partial: #c47b0a;
+    --font-display: 'Playfair Display', serif; --font-body: 'Inter', sans-serif;
+    --shadow-lg: 0 8px 40px rgba(0,0,0,0.10);
+  }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  body::before { content: ''; position: fixed; inset: 0; background: linear-gradient(160deg, rgba(200,16,46,0.04) 0%, transparent 40%); pointer-events: none; }
+  .app { position: relative; z-index: 1; width: 100%; max-width: 520px; padding: 20px; }
+  .screen { display: none; animation: fadeUp 0.35s ease both; }
+  .screen.active { display: block; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+  .logo-area { text-align: center; margin-bottom: 28px; }
+  .logo-lockup { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .logo-icon { width: 36px; height: 36px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 700; font-family: var(--font-display); }
+  .logo-title { font-family: var(--font-display); font-size: 1.6rem; color: var(--text); }
+  .logo-title span { color: var(--accent); }
+  .logo-sub { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px; box-shadow: var(--shadow-lg); border-top: 3px solid var(--accent); }
+  .card-title { font-family: var(--font-display); font-size: 1.35rem; margin-bottom: 5px; }
+  .card-sub { font-size: 0.82rem; color: var(--muted); margin-bottom: 26px; line-height: 1.5; }
+
+  label { display: block; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; margin-top: 16px; font-weight: 500; }
+  label:first-of-type { margin-top: 0; }
+  select, input { width: 100%; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 8px; padding: 10px 13px; color: var(--text); font-family: var(--font-body); font-size: 0.92rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s; appearance: none; }
+  select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(200,16,46,0.08); }
+
+  .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-family: var(--font-body); font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: all 0.18s; letter-spacing: 0.02em; margin-top: 22px; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(200,16,46,0.25); }
+  .btn-primary:disabled { background: #ccc; transform: none; box-shadow: none; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1.5px solid var(--border); margin-top: 10px; }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { width: auto; display: inline-block; padding: 7px 14px; margin-top: 0; font-size: 0.77rem; }
+
+  .error-msg { font-size: 0.78rem; color: var(--miss); margin-top: 10px; min-height: 18px; }
+  .week-badge { display: inline-flex; align-items: center; gap: 7px; background: var(--accent-light); border: 1px solid rgba(200,16,46,0.15); border-radius: 20px; padding: 5px 13px; font-size: 0.78rem; color: var(--muted); margin-bottom: 18px; }
+  .week-badge span { color: var(--accent); font-weight: 600; }
+
+  .measurable-row { display: flex; align-items: center; gap: 12px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 13px 15px; margin-bottom: 9px; transition: border-color 0.2s; }
+  .measurable-row:hover { border-color: rgba(200,16,46,0.4); }
+  .m-label { flex: 1; font-size: 0.86rem; font-weight: 500; }
+  .m-target { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  .m-input { width: 78px; text-align: center; flex-shrink: 0; margin-top: 0; }
+  .m-status { width: 22px; font-size: 1rem; flex-shrink: 0; text-align: center; }
+
+  .week-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .week-nav-btn { background: var(--surface2); border: 1.5px solid var(--border); color: var(--text); border-radius: 7px; padding: 6px 13px; cursor: pointer; font-size: 0.8rem; font-family: var(--font-body); font-weight: 500; transition: all 0.18s; }
+  .week-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .week-label { font-family: var(--font-display); font-size: 1rem; color: var(--accent); }
+
+  .team-grid { display: grid; gap: 8px; }
+  .team-card { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 11px; padding: 14px 16px; cursor: pointer; transition: all 0.18s; display: flex; align-items: center; gap: 13px; }
+  .team-card:hover { border-color: rgba(200,16,46,0.4); transform: translateX(2px); }
+  .team-card.not-submitted { border-left: 3px solid #ddd; }
+  .team-card.submitted { border-left: 3px solid var(--hit); }
+  .tc-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.82rem; flex-shrink: 0; }
+  .tc-info { flex: 1; }
+  .tc-name { font-weight: 600; font-size: 0.88rem; }
+  .tc-detail { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
+  .tc-score { text-align: right; }
+  .tc-pct { font-family: var(--font-display); font-size: 1.25rem; }
+  .tc-pct.great { color: var(--hit); } .tc-pct.ok { color: var(--partial); } .tc-pct.poor { color: var(--miss); } .tc-pct.na { color: var(--muted); }
+
+  .detail-header { display: flex; align-items: center; gap: 13px; margin-bottom: 22px; }
+  .detail-avatar { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; }
+  .detail-name { font-family: var(--font-display); font-size: 1.4rem; }
+  .detail-role { font-size: 0.75rem; color: var(--muted); }
+  .detail-m-row { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 15px; margin-bottom: 8px; }
+  .dm-label { font-size: 0.86rem; font-weight: 500; } .dm-target { font-size: 0.7rem; color: var(--muted); }
+  .dm-right { text-align: right; } .dm-value { font-weight: 700; font-size: 1.02rem; }
+  .dm-badge { font-size: 0.68rem; border-radius: 4px; padding: 2px 7px; margin-top: 3px; display: inline-block; font-weight: 500; }
+  .badge-hit { background: var(--hit-bg); color: var(--hit); } .badge-miss { background: var(--miss-bg); color: var(--miss); } .badge-na { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+  .setup-user-row { display: flex; align-items: center; gap: 10px; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 13px; margin-bottom: 8px; cursor: pointer; transition: all 0.18s; }
+  .setup-user-row:hover { border-color: rgba(200,16,46,0.4); }
+  .su-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; }
+  .su-name { flex: 1; font-size: 0.86rem; font-weight: 500; } .su-count { font-size: 0.72rem; color: var(--muted); } .su-arrow { color: var(--muted); }
+
+  .measurable-edit-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .measurable-edit-row input { flex: 1; margin-top: 0; }
+  .measurable-edit-row .m-target-input { width: 78px; flex-shrink: 0; }
+  .del-btn { background: none; border: none; color: var(--miss); cursor: pointer; font-size: 0.95rem; padding: 4px 7px; flex-shrink: 0; border-radius: 5px; }
+  .del-btn:hover { background: var(--miss-bg); }
+
+  .tab-bar { display: flex; gap: 3px; background: var(--surface2); border-radius: 9px; padding: 3px; margin-bottom: 20px; border: 1px solid var(--border); }
+  .tab { flex: 1; text-align: center; padding: 8px; font-size: 0.78rem; border-radius: 7px; cursor: pointer; color: var(--muted); transition: all 0.18s; font-weight: 500; }
+  .tab.active { background: var(--accent); color: #fff; font-weight: 600; }
+
+  .back-link { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--muted); cursor: pointer; margin-bottom: 18px; transition: color 0.18s; font-weight: 500; }
+  .back-link:hover { color: var(--accent); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+  .summary-bar { display: flex; gap: 8px; margin-bottom: 18px; }
+  .sum-box { flex: 1; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+  .sum-val { font-family: var(--font-display); font-size: 1.55rem; }
+  .sum-label { font-size: 0.67rem; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 500; }
+
+  .add-member-form { background: var(--surface2); border: 1.5px solid var(--border); border-radius: 10px; padding: 14px; margin-top: 14px; }
+  .inline-row { display: flex; gap: 7px; }
+  .inline-row input { flex: 1; margin-top: 0; }
+  .inline-row .btn { margin-top: 0; width: auto; padding: 10px 16px; }
+
+  .alert-success { background: var(--hit-bg); border: 1px solid rgba(26,122,74,0.2); border-radius: 8px; padding: 11px 14px; font-size: 0.8rem; color: var(--hit); margin-top: 10px; display: none; }
+  .role-pill { display: inline-block; background: var(--accent-light); color: var(--accent); font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 20px; padding: 2px 9px; margin-left: 8px; vertical-align: middle; }
+
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+  .spinner-dark { border-color: rgba(200,16,46,0.15); border-top-color: var(--accent); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; gap: 16px; }
+  .loading-overlay .spinner-dark { width: 32px; height: 32px; }
+  .loading-overlay p { font-size: 0.85rem; color: var(--muted); }
+
+  .ms-signin-btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: 8px; background: #fff; font-family: var(--font-body); font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: all 0.18s; margin-top: 22px; color: var(--text); }
+  .ms-signin-btn:hover { border-color: #0078d4; color: #0078d4; }
+  .ms-logo { width: 18px; height: 18px; }
+
+  .user-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 0.78rem; color: var(--muted); margin-bottom: 16px; }
+  .user-chip strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="logo-lockup" style="margin-bottom:8px;">
+    <div class="logo-icon">IP</div>
+    <div class="logo-title" style="font-family:'Georgia',serif;font-size:1.6rem;">IP <span style="color:#c8102e;">Wealth</span></div>
+  </div>
+  <div class="spinner spinner-dark"></div>
+  <p id="loading-msg">Initialising…</p>
+</div>
+
+<div class="app" style="display:none;" id="main-app">
+
+<!-- MICROSOFT LOGIN -->
+<div class="screen" id="screen-mslogin">
+  <div class="logo-area">
+    <div class="logo-lockup"><div class="logo-icon">IP</div><div class="logo-title">IP <span>Wealth</span></div></div>
+    <div class="logo-sub">Weekly Scorecard</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Welcome</div>
+    <div class="card-sub">Sign in with your IP Wealth Microsoft account to access the scorecard.</div>
+    <button class="ms-signin-btn" onclick="msSignIn()">
+      <svg class="ms-logo" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>
+      Sign in with Microsoft
+    </button>
+    <div class="error-msg" id="ms-error"></div>
+  </div>
+</div>
+
+<!-- PIN LOGIN -->
+<div class="screen" id="screen-login">
+  <div class="logo-area">
+    <div class="logo-lockup"><div class="logo-icon">IP</div><div class="logo-title">IP <span>Wealth</span></div></div>
+    <div class="logo-sub">Weekly Scorecard</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Select Your Profile</div>
+    <div class="card-sub" id="login-welcome-sub">Select your name and enter your PIN.</div>
+    <div class="user-chip" id="ms-user-chip"><strong id="ms-user-name"></strong></div>
+    <label>Your Name</label>
+    <select id="login-name"><option value="">— Select your name —</option></select>
+    <label>PIN</label>
+    <input type="password" id="login-pin" placeholder="Enter your PIN" maxlength="6">
+    <div class="error-msg" id="login-error"></div>
+    <button class="btn btn-primary" onclick="doLogin()">Continue →</button>
+    <button class="btn btn-ghost" onclick="msSignOut()">Sign out of Microsoft</button>
+  </div>
+</div>
+
+<!-- EMPLOYEE ENTRY -->
+<div class="screen" id="screen-entry">
+  <div class="logo-area">
+    <div class="logo-lockup"><div class="logo-icon">IP</div><div class="logo-title">IP <span>Wealth</span></div></div>
+    <div class="logo-sub">Weekly Scorecard</div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+      <div><div class="card-title" id="entry-greeting">Hello!</div><div class="card-sub" style="margin-bottom:0;">Log your measurables for this week.</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+    </div>
+    <div class="week-badge" style="margin-top:14px;">📅 Week of <span id="entry-week-label"></span></div>
+    <div id="entry-measurables"></div>
+    <div class="alert-success" id="entry-already-msg">✓ Already submitted this week — update your figures and resubmit anytime.</div>
+    <button class="btn btn-primary" id="submit-btn" onclick="submitEntry()">Submit This Week ✓</button>
+    <div class="error-msg" id="entry-error"></div>
+  </div>
+</div>
+
+<!-- MANAGER DASHBOARD -->
+<div class="screen" id="screen-manager">
+  <div class="logo-area">
+    <div class="logo-lockup"><div class="logo-icon">IP</div><div class="logo-title">IP <span>Wealth</span></div></div>
+    <div class="logo-sub">Manager Dashboard <span class="role-pill">Paul</span></div>
+  </div>
+  <div class="card">
+    <div class="tab-bar">
+      <div class="tab active" onclick="switchTab('overview')">Team Overview</div>
+      <div class="tab" onclick="switchTab('setup')">Team Setup</div>
+    </div>
+    <div id="tab-overview">
+      <div class="week-nav">
+        <button class="week-nav-btn" onclick="changeWeek(-1)">← Prev</button>
+        <div class="week-label" id="mgr-week-label"></div>
+        <button class="week-nav-btn" onclick="changeWeek(1)">Next →</button>
+      </div>
+      <div class="summary-bar" id="mgr-summary"></div>
+      <div class="team-grid" id="mgr-team-grid"></div>
+      <button class="btn btn-ghost" style="margin-top:12px;" onclick="doLogout()">Sign Out</button>
+    </div>
+    <div id="tab-setup" style="display:none;">
+      <div style="font-size:0.8rem;color:var(--muted);margin-bottom:14px;">Click a team member to configure their measurables, targets, and PIN.</div>
+      <div id="setup-user-list"></div>
+      <hr class="divider">
+      <div style="font-size:0.82rem;font-weight:600;margin-bottom:10px;">Add New Team Member</div>
+      <div class="add-member-form">
+        <div class="inline-row">
+          <input type="text" id="new-member-name" placeholder="Full name">
+          <input type="text" id="new-member-pin" placeholder="PIN" style="width:88px;">
+          <button class="btn btn-primary" onclick="addMember()">Add</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MEMBER DETAIL -->
+<div class="screen" id="screen-detail">
+  <div class="logo-area"><div class="logo-lockup"><div class="logo-icon">IP</div><div class="logo-title">IP <span>Wealth</span></div></div></div>
+  <div class="card">
+    <div class="back-link" onclick="showManagerDashboard()">← Back to Dashboard</div>
+    <div class="detail-header">
+      <div class="detail-avatar" id="detail-avatar"></div>
+      <div><div class="detail-name" id="detail-name"></div><div class="detail-role" id="detail-week-sub"></div></div>
+    </div>
+    <div id="detail-measurables"></div>
+  </div>
+</div>
+
+<!-- SETUP MEMBER -->
+<div class="screen" id="screen-setup-member">
+  <div class="logo-area"><div class="logo-lockup"><div class="logo-icon">IP</div><div class="logo-title">IP <span>Wealth</span></div></div></div>
+  <div class="card">
+    <div class="back-link" onclick="showSetupTab()">← Back to Team Setup</div>
+    <div class="detail-header">
+      <div class="detail-avatar" id="setup-avatar"></div>
+      <div><div class="detail-name" id="setup-member-name"></div><div class="detail-role">Measurables &amp; PIN Configuration</div></div>
+    </div>
+    <label>PIN</label>
+    <input type="text" id="setup-pin-input" placeholder="Set PIN for this member" maxlength="6">
+    <hr class="divider">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div style="font-size:0.82rem;font-weight:600;">Measurables</div>
+      <button class="btn btn-ghost btn-sm" onclick="addMeasurable()">+ Add Measurable</button>
+    </div>
+    <div style="display:flex;gap:6px;font-size:0.67rem;color:var(--muted);margin-bottom:7px;padding:0 2px;font-weight:500;text-transform:uppercase;letter-spacing:0.07em;">
+      <div style="flex:1;">Measurable Name</div><div style="width:78px;text-align:center;">Weekly Target</div><div style="width:30px;"></div>
+    </div>
+    <div id="setup-measurables-list"></div>
+    <button class="btn btn-primary" onclick="saveMemberSetup()">Save Changes</button>
+    <hr class="divider">
+    <button class="btn" style="background:transparent;border:1.5px solid var(--miss);color:var(--miss);margin-top:0;" onclick="removeMember()">Remove This Team Member</button>
+  </div>
+</div>
+
+</div><!-- end .app -->
+
+<script>
+// ═══════════════════════════════════════════════════════
+// MSAL CONFIG — IP Wealth Azure App Registration
+// ═══════════════════════════════════════════════════════
+const MSAL_CONFIG = {
+  auth: {
+    clientId: '94b365bc-60b7-478c-abb6-00b607689f30',
+    authority: 'https://login.microsoftonline.com/4e666b79-5c2e-4ffa-ba43-1b3ec7be262d',
+    redirectUri: window.location.href.split('?')[0].split('#')[0],
+  },
+  cache: { cacheLocation: 'sessionStorage' }
+};
+const SCOPES = ['Sites.ReadWrite.All'];
+const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
+
+// ═══════════════════════════════════════════════════════
+// SHAREPOINT CONFIG
+// ═══════════════════════════════════════════════════════
+const SP_SITE    = 'ipwealth.sharepoint.com:/sites/IPWealth';
+const SP_LIST    = 'ScoreboardEntries';
+const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
+
+let spSiteId = null;
+let spListId = null;
+
+// ═══════════════════════════════════════════════════════
+// MEMBER DATA (stored in localStorage)
+// ═══════════════════════════════════════════════════════
+const MC=[{bg:'#fdedf0',text:'#c8102e'},{bg:'#edf3fd',text:'#1a5abf'},{bg:'#edf7f1',text:'#1a7a4a'},{bg:'#fdf6e8',text:'#c47b0a'},{bg:'#f3edfb',text:'#7b3fa0'},{bg:'#edfafa',text:'#0a7a7a'},{bg:'#fdf0e8',text:'#bf5a1a'},{bg:'#f0fded',text:'#3a9a1a'}];
+
+function loadMembers(){
+  try{ const s=localStorage.getItem('ipw_members'); if(s) return JSON.parse(s); }catch(e){}
+  return [
+    {id:1,name:'Paul',    pin:'1234',isManager:true, ci:0,measurables:[{name:'Team check-ins',target:5},{name:'Reports reviewed',target:10}]},
+    {id:2,name:'Jennifer',pin:'1111',isManager:false,ci:1,measurables:[{name:'Calls made',target:50},{name:'Leads converted',target:8}]},
+    {id:3,name:'Karla',   pin:'2222',isManager:false,ci:2,measurables:[{name:'New matters filed',target:15},{name:'Client follow-ups',target:20}]},
+    {id:4,name:'Ally',    pin:'3333',isManager:false,ci:3,measurables:[{name:'Renewals paid',target:12},{name:'Calls made',target:40}]},
+    {id:5,name:'Megan',   pin:'4444',isManager:false,ci:4,measurables:[{name:'Leads converted',target:6},{name:'Proposals sent',target:10}]},
+    {id:6,name:'Zoe',     pin:'5555',isManager:false,ci:5,measurables:[{name:'Calls made',target:45},{name:'Renewals paid',target:8}]},
+    {id:7,name:'Tejal',   pin:'6666',isManager:false,ci:6,measurables:[{name:'New matters filed',target:10},{name:'Emails sent',target:60}]},
+    {id:8,name:'Krystle', pin:'7777',isManager:false,ci:7,measurables:[{name:'Calls made',target:40},{name:'Leads converted',target:5},{name:'Renewals paid',target:6}]},
+  ];
+}
+function saveMembers(){ localStorage.setItem('ipw_members',JSON.stringify(state.members)); }
+
+let state = {
+  currentUser: null,
+  managerWeekOffset: 0,
+  setupMemberId: null,
+  activeTab: 'overview',
+  members: loadMembers(),
+  msAccount: null,
+  accessToken: null,
+  weekCache: {},
+};
+
+const col = m => MC[m.ci % MC.length];
+
+// ═══════════════════════════════════════════════════════
+// WEEK HELPERS
+// ═══════════════════════════════════════════════════════
+function wk(o=0){
+  const d=new Date(); d.setDate(d.getDate()-d.getDay()+1+o*7);
+  const y=d.getFullYear(); const w=Math.ceil(((d-new Date(y,0,1))/86400000+1)/7);
+  return `${y}-W${String(w).padStart(2,'0')}`;
+}
+function wl(o=0){
+  const d=new Date(); d.setDate(d.getDate()-d.getDay()+1+o*7);
+  const e=new Date(d); e.setDate(d.getDate()+6);
+  const f=dt=>dt.toLocaleDateString('en-AU',{day:'numeric',month:'short'});
+  return `${f(d)} – ${f(e)}`;
+}
+
+// ═══════════════════════════════════════════════════════
+// MICROSOFT AUTH
+// ═══════════════════════════════════════════════════════
+async function getToken(){
+  try {
+    const result = await msalInstance.acquireTokenSilent({
+      scopes: SCOPES,
+      account: state.msAccount
+    });
+    state.accessToken = result.accessToken;
+    return result.accessToken;
+  } catch(e) {
+    const result = await msalInstance.acquireTokenPopup({ scopes: SCOPES });
+    state.accessToken = result.accessToken;
+    return result.accessToken;
+  }
+}
+
+async function msSignIn(){
+  try {
+    document.getElementById('ms-error').textContent = '';
+    const result = await msalInstance.loginPopup({ scopes: SCOPES });
+    state.msAccount = result.account;
+    state.accessToken = result.accessToken;
+    await initSP();
+    showPinLogin();
+  } catch(e) {
+    document.getElementById('ms-error').textContent = 'Sign in failed. Please try again.';
+    console.error(e);
+  }
+}
+
+function msSignOut(){
+  msalInstance.logoutPopup();
+  state.msAccount = null;
+  state.accessToken = null;
+  ss('screen-mslogin');
+}
+
+// ═══════════════════════════════════════════════════════
+// GRAPH API HELPERS
+// ═══════════════════════════════════════════════════════
+async function gGet(path){
+  const token = await getToken();
+  const r = await fetch(`${GRAPH_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if(!r.ok) throw new Error(`GET ${path} → ${r.status}`);
+  return r.json();
+}
+
+async function gPost(path, body){
+  const token = await getToken();
+  const r = await fetch(`${GRAPH_BASE}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if(!r.ok){ const t=await r.text(); throw new Error(`POST ${path} → ${r.status}: ${t}`); }
+  return r.json();
+}
+
+async function gDelete(path){
+  const token = await getToken();
+  const r = await fetch(`${GRAPH_BASE}${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if(!r.ok) throw new Error(`DELETE ${path} → ${r.status}`);
+}
+
+// ═══════════════════════════════════════════════════════
+// SHAREPOINT INIT
+// ═══════════════════════════════════════════════════════
+async function initSP(){
+  setLoading(true, 'Connecting to SharePoint…');
+  const site = await gGet(`/sites/${SP_SITE}`);
+  spSiteId = site.id;
+  const lists = await gGet(`/sites/${spSiteId}/lists?$filter=displayName eq '${SP_LIST}'`);
+  if(!lists.value || lists.value.length === 0) throw new Error('ScoreboardEntries list not found');
+  spListId = lists.value[0].id;
+  setLoading(false);
+}
+
+async function fetchWeekEntries(weekKey){
+  if(state.weekCache[weekKey]) return state.weekCache[weekKey];
+  const res = await gGet(
+    `/sites/${spSiteId}/lists/${spListId}/items?$filter=fields/WeekKey eq '${weekKey}'&$expand=fields&$top=500`
+  );
+  state.weekCache[weekKey] = res.value || [];
+  return state.weekCache[weekKey];
+}
+
+function getMemberItems(allItems, memberName){
+  return allItems.filter(i => i.fields.MemberName === memberName);
+}
+
+async function saveEntries(memberName, weekKey, measurables, values){
+  // Delete old rows for this member+week
+  const all = await fetchWeekEntries(weekKey);
+  const old = getMemberItems(all, memberName);
+  for(const item of old){
+    await gDelete(`/sites/${spSiteId}/lists/${spListId}/items/${item.id}`);
+  }
+  // Insert fresh rows
+  for(let i=0; i<measurables.length; i++){
+    const ms = measurables[i];
+    const val = values[i];
+    if(val === null) continue;
+    await gPost(`/sites/${spSiteId}/lists/${spListId}/items`, {
+      fields: {
+        Title: `${memberName}_${weekKey}_${i}`,
+        MemberName: memberName,
+        WeekKey: weekKey,
+        MeasurableName: ms.name,
+        Value: val,
+        Target: ms.target,
+        IsHit: val >= ms.target
+      }
+    });
+  }
+  delete state.weekCache[weekKey]; // bust cache
+}
+
+// ═══════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════
+function ss(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const el=document.getElementById(id); el.classList.add('active'); void el.offsetWidth;
+}
+
+function setLoading(show, msg=''){
+  document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+  document.getElementById('main-app').style.display = show ? 'none' : 'block';
+  if(msg) document.getElementById('loading-msg').textContent = msg;
+}
+
+// ═══════════════════════════════════════════════════════
+// SCREENS
+// ═══════════════════════════════════════════════════════
+function showPinLogin(){
+  const acct = state.msAccount;
+  document.getElementById('ms-user-name').textContent = acct ? acct.name || acct.username : '';
+  const sel = document.getElementById('login-name');
+  sel.innerHTML = '<option value="">— Select your name —</option>';
+  state.members.forEach(m=>{
+    const o=document.createElement('option');
+    o.value=m.id; o.textContent=m.name+(m.isManager?' (Manager)':'');
+    sel.appendChild(o);
+  });
+  document.getElementById('login-pin').value='';
+  document.getElementById('login-error').textContent='';
+  ss('screen-login');
+}
+
+function doLogin(){
+  const id=parseInt(document.getElementById('login-name').value);
+  const pin=document.getElementById('login-pin').value;
+  const err=document.getElementById('login-error');
+  if(!id){err.textContent='Please select your name.';return;}
+  const m=state.members.find(x=>x.id===id);
+  if(!m){err.textContent='Member not found.';return;}
+  if(m.pin!==pin){err.textContent='Incorrect PIN. Please try again.';return;}
+  err.textContent=''; state.currentUser=m;
+  m.isManager ? showManagerDashboard() : showEntryScreen();
+}
+
+function doLogout(){ state.currentUser=null; showPinLogin(); }
+
+async function showEntryScreen(){
+  const m=state.currentUser; const weekKey=wk(0);
+  document.getElementById('entry-greeting').textContent=`Welcome, ${m.name}`;
+  document.getElementById('entry-week-label').textContent=wl(0);
+  document.getElementById('entry-already-msg').style.display='none';
+  document.getElementById('entry-error').textContent='';
+  const btn=document.getElementById('submit-btn');
+  btn.disabled=false; btn.textContent='Submit This Week ✓'; btn.style.background='';
+
+  if(m.measurables.length===0){
+    document.getElementById('entry-measurables').innerHTML='<div style="color:var(--muted);font-size:0.82rem;padding:14px 0;line-height:1.5;">No measurables assigned yet. Please ask your manager to configure these.</div>';
+    ss('screen-entry'); return;
+  }
+
+  renderEntryInputs(m.measurables, null);
+  ss('screen-entry');
+
+  try {
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Loading…';
+    const items=await fetchWeekEntries(weekKey);
+    const mine=getMemberItems(items, m.name);
+    if(mine.length>0){
+      document.getElementById('entry-already-msg').style.display='block';
+      renderEntryInputs(m.measurables, mine);
+    }
+    btn.disabled=false; btn.textContent='Submit This Week ✓';
+  } catch(e){
+    btn.disabled=false; btn.textContent='Submit This Week ✓';
+    console.error(e);
+  }
+}
+
+function renderEntryInputs(measurables, spItems){
+  const ct=document.getElementById('entry-measurables'); ct.innerHTML='';
+  measurables.forEach((ms,i)=>{
+    let val='';
+    if(spItems){ const match=spItems.find(it=>it.fields.MeasurableName===ms.name); if(match) val=match.fields.Value; }
+    const row=document.createElement('div'); row.className='measurable-row';
+    row.innerHTML=`<div style="flex:1;"><div class="m-label">${ms.name}</div><div class="m-target">Weekly target: ${ms.target}</div></div><input type="number" class="m-input" id="mi-${i}" min="0" placeholder="0" value="${val}" oninput="us(${i},${ms.target})"><div class="m-status" id="ms-${i}">${val===''?'–':(val>=ms.target?'✅':'❌')}</div>`;
+    ct.appendChild(row);
+  });
+}
+
+function us(i,target){
+  const inp=document.getElementById(`mi-${i}`); const st=document.getElementById(`ms-${i}`);
+  const v=parseInt(inp.value); if(isNaN(v)||inp.value===''){st.textContent='–';return;}
+  st.textContent=v>=target?'✅':'❌';
+}
+
+async function submitEntry(){
+  const m=state.currentUser; const weekKey=wk(0);
+  const err=document.getElementById('entry-error'); const btn=document.getElementById('submit-btn');
+  if(m.measurables.length===0){err.textContent='No measurables to submit.';return;}
+  const values=[]; let hasValue=false;
+  for(let i=0;i<m.measurables.length;i++){
+    const inp=document.getElementById(`mi-${i}`); const v=inp.value;
+    if(v!=='') hasValue=true; values.push(v===''?null:parseInt(v));
+  }
+  if(!hasValue){err.textContent='Please enter at least one figure before submitting.';return;}
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Saving to SharePoint…'; err.textContent='';
+  try {
+    await saveEntries(m.name, weekKey, m.measurables, values);
+    document.getElementById('entry-already-msg').style.display='block';
+    btn.textContent='✓ Saved to SharePoint!'; btn.style.background='var(--hit)';
+    setTimeout(()=>{ btn.disabled=false; btn.textContent='Update This Week'; btn.style.background=''; },2500);
+  } catch(e){
+    err.textContent='Error saving. Please try again.';
+    btn.disabled=false; btn.textContent='Submit This Week ✓';
+    console.error(e);
+  }
+}
+
+function showManagerDashboard(){ state.activeTab='overview'; rTabs(); renderOverview(); ss('screen-manager'); }
+function switchTab(tab){ state.activeTab=tab; rTabs(); tab==='overview'?renderOverview():rSetup(); }
+function rTabs(){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab')[state.activeTab==='overview'?0:1].classList.add('active');
+  document.getElementById('tab-overview').style.display=state.activeTab==='overview'?'':'none';
+  document.getElementById('tab-setup').style.display=state.activeTab==='setup'?'':'none';
+}
+function changeWeek(d){ state.managerWeekOffset+=d; renderOverview(); }
+
+async function renderOverview(){
+  const offset=state.managerWeekOffset; const weekKey=wk(offset);
+  document.getElementById('mgr-week-label').textContent=wl(offset);
+  const grid=document.getElementById('mgr-team-grid'); const sumEl=document.getElementById('mgr-summary');
+  grid.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);font-size:0.83rem;"><div class="spinner spinner-dark" style="display:block;margin:0 auto 10px;width:22px;height:22px;"></div>Loading from SharePoint…</div>';
+  sumEl.innerHTML='';
+  let allItems=[];
+  try { allItems=await fetchWeekEntries(weekKey); } catch(e){ console.error(e); }
+  const nonMgr=state.members.filter(m=>!m.isManager);
+  let submitted=0,totalHit=0,totalMs=0;
+  grid.innerHTML='';
+  nonMgr.forEach(m=>{
+    const c=col(m); const myItems=getMemberItems(allItems,m.name);
+    const hasEntry=myItems.length>0; if(hasEntry) submitted++;
+    let hitCount=0,tot=m.measurables.length;
+    if(hasEntry&&tot>0){ m.measurables.forEach(ms=>{ const match=myItems.find(it=>it.fields.MeasurableName===ms.name); if(match&&match.fields.IsHit) hitCount++; }); totalHit+=hitCount; totalMs+=tot; }
+    const pct=(!hasEntry||tot===0)?null:Math.round((hitCount/tot)*100);
+    const pc=pct===null?'na':pct>=80?'great':pct>=50?'ok':'poor';
+    const pt=pct===null?(hasEntry?'N/A':'—'):`${pct}%`;
+    const card=document.createElement('div'); card.className=`team-card ${hasEntry?'submitted':'not-submitted'}`;
+    card.innerHTML=`<div class="tc-avatar" style="background:${c.bg};color:${c.text};">${m.name[0]}</div><div class="tc-info"><div class="tc-name">${m.name}</div><div class="tc-detail">${hasEntry?`${hitCount} of ${tot} targets hit`:'Not yet submitted'}</div></div><div class="tc-score"><div class="tc-pct ${pc}">${pt}</div></div>`;
+    card.onclick=()=>showMemberDetail(m,allItems,weekKey); grid.appendChild(card);
+  });
+  const op=totalMs>0?Math.round((totalHit/totalMs)*100):0;
+  sumEl.innerHTML=`<div class="sum-box"><div class="sum-val" style="color:var(--hit)">${submitted}<span style="font-size:1rem;color:var(--muted)">/${nonMgr.length}</span></div><div class="sum-label">Submitted</div></div><div class="sum-box"><div class="sum-val" style="color:var(--accent)">${totalHit}</div><div class="sum-label">Targets Hit</div></div><div class="sum-box"><div class="sum-val" style="color:${op>=80?'var(--hit)':op>=50?'var(--partial)':'var(--miss)'}">${totalMs>0?op+'%':'—'}</div><div class="sum-label">Team Rate</div></div>`;
+}
+
+function showMemberDetail(member,allItems,weekKey){
+  const c=col(member);
+  document.getElementById('detail-name').textContent=member.name;
+  document.getElementById('detail-week-sub').textContent=`Week of ${wl(state.managerWeekOffset)}`;
+  const av=document.getElementById('detail-avatar'); av.style.background=c.bg; av.style.color=c.text; av.textContent=member.name[0];
+  const myItems=getMemberItems(allItems,member.name);
+  const ct=document.getElementById('detail-measurables'); ct.innerHTML='';
+  if(member.measurables.length===0){ ct.innerHTML='<div style="color:var(--muted);font-size:0.82rem;">No measurables configured.</div>'; }
+  else if(myItems.length===0){ ct.innerHTML='<div style="color:var(--muted);font-size:0.82rem;padding:12px 0;">This team member has not submitted yet this week.</div>'; }
+  else { member.measurables.forEach(ms=>{ const match=myItems.find(it=>it.fields.MeasurableName===ms.name); const v=match?match.fields.Value:null; const hit=match?match.fields.IsHit:false; const row=document.createElement('div'); row.className='detail-m-row'; row.innerHTML=`<div><div class="dm-label">${ms.name}</div><div class="dm-target">Target: ${ms.target}</div></div><div class="dm-right"><div class="dm-value" style="color:${v==null?'var(--muted)':hit?'var(--hit)':'var(--miss)'}">${v==null?'—':v}</div><div class="dm-badge ${v==null?'badge-na':hit?'badge-hit':'badge-miss'}">${v==null?'not entered':hit?'✓ Target hit':'✗ Below target'}</div></div>`; ct.appendChild(row); }); }
+  ss('screen-detail');
+}
+
+function rSetup(){
+  const list=document.getElementById('setup-user-list'); list.innerHTML='';
+  state.members.filter(m=>!m.isManager).forEach(m=>{ const c=col(m); const row=document.createElement('div'); row.className='setup-user-row'; row.innerHTML=`<div class="su-avatar" style="background:${c.bg};color:${c.text};">${m.name[0]}</div><div class="su-name">${m.name}</div><div class="su-count">${m.measurables.length} measurable${m.measurables.length!==1?'s':''}</div><div class="su-arrow">›</div>`; row.onclick=()=>setupMember(m.id); list.appendChild(row); });
+  document.getElementById('new-member-name').value=''; document.getElementById('new-member-pin').value='';
+}
+function showSetupTab(){ state.activeTab='setup'; rTabs(); rSetup(); ss('screen-manager'); }
+function setupMember(mid){ state.setupMemberId=mid; const m=state.members.find(x=>x.id===mid); const c=col(m); document.getElementById('setup-member-name').textContent=m.name; const av=document.getElementById('setup-avatar'); av.style.background=c.bg; av.style.color=c.text; av.textContent=m.name[0]; document.getElementById('setup-pin-input').value=m.pin; rEditMs(m.measurables.map(x=>({...x}))); ss('screen-setup-member'); }
+let tmp=[];
+function rEditMs(ms){ tmp=ms; const list=document.getElementById('setup-measurables-list'); list.innerHTML=''; ms.forEach((m,i)=>{ const row=document.createElement('div'); row.className='measurable-edit-row'; row.innerHTML=`<input type="text" placeholder="e.g. Calls made" value="${m.name}" oninput="tmp[${i}].name=this.value"><input type="number" class="m-target-input" placeholder="Target" value="${m.target}" oninput="tmp[${i}].target=parseInt(this.value)||0"><button class="del-btn" onclick="delMs(${i})">✕</button>`; list.appendChild(row); }); }
+function addMeasurable(){ tmp.push({name:'',target:0}); rEditMs(tmp); }
+function delMs(i){ tmp.splice(i,1); rEditMs(tmp); }
+function saveMemberSetup(){ const m=state.members.find(x=>x.id===state.setupMemberId); const pin=document.getElementById('setup-pin-input').value.trim(); if(!pin){alert('Please enter a PIN.');return;} m.pin=pin; m.measurables=tmp.filter(x=>x.name.trim()); saveMembers(); showSetupTab(); }
+function removeMember(){ const m=state.members.find(x=>x.id===state.setupMemberId); if(!confirm(`Remove ${m.name}?`))return; state.members=state.members.filter(x=>x.id!==state.setupMemberId); saveMembers(); showSetupTab(); }
+function addMember(){ const name=document.getElementById('new-member-name').value.trim(); const pin=document.getElementById('new-member-pin').value.trim(); if(!name||!pin){alert('Please enter a name and PIN.');return;} const newId=Math.max(...state.members.map(m=>m.id))+1; state.members.push({id:newId,name,pin,isManager:false,ci:newId%MC.length,measurables:[]}); saveMembers(); document.getElementById('new-member-name').value=''; document.getElementById('new-member-pin').value=''; rSetup(); }
+
+// ═══════════════════════════════════════════════════════
+// BOOT — handle redirect and check for existing session
+// ═══════════════════════════════════════════════════════
+async function boot(){
+  setLoading(true, 'Initialising…');
+  try {
+    await msalInstance.initialize();
+    // Handle redirect response if returning from login
+    const response = await msalInstance.handleRedirectPromise();
+    if(response){ state.msAccount=response.account; state.accessToken=response.accessToken; }
+    // Check for existing signed-in account
+    const accounts = msalInstance.getAllAccounts();
+    if(accounts.length > 0 && !state.msAccount){ state.msAccount=accounts[0]; }
+    if(state.msAccount){
+      await initSP();
+      setLoading(false);
+      showPinLogin();
+    } else {
+      setLoading(false);
+      ss('screen-mslogin');
+    }
+  } catch(e){
+    console.error('Boot error:', e);
+    setLoading(false);
+    ss('screen-mslogin');
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
